@@ -1510,7 +1510,49 @@ class World {
 }
 
 // UI
-function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, level, message, dayTimer, dayDuration) {
+function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, level, message, dayTimer, dayDuration, treasures = [], camera = null, followers = []) {
+    // Define HUD regions for collision detection
+    const hudRegions = {
+        leftPanel: { x: 10, y: 10, width: 180, height: 185 },
+        topCenter: { x: canvas.width / 2 - 200, y: 10, width: 400, height: 55 },
+        compass: { x: canvas.width - 85, y: 15, width: 70, height: 85 }
+    };
+
+    // Check if player or followers overlap with a HUD region
+    function checkOverlap(region) {
+        if (!camera) return false;
+
+        // Check player
+        const playerScreenX = player.x - camera.x;
+        const playerScreenY = player.y - camera.y;
+        if (playerScreenX + player.width > region.x &&
+            playerScreenX < region.x + region.width &&
+            playerScreenY + player.height > region.y &&
+            playerScreenY < region.y + region.height) {
+            return true;
+        }
+
+        // Check followers (pikmin)
+        for (const follower of followers) {
+            const followerScreenX = follower.x - camera.x;
+            const followerScreenY = follower.y - camera.y;
+            if (followerScreenX + 8 > region.x &&
+                followerScreenX < region.x + region.width &&
+                followerScreenY + 8 > region.y &&
+                followerScreenY < region.y + region.height) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Calculate opacity for left panel
+    const leftPanelOpacity = checkOverlap(hudRegions.leftPanel) ? 0.3 : 1.0;
+
+    // Draw left panel HUD elements
+    ctx.save();
+    ctx.globalAlpha = leftPanelOpacity;
+
     // Health hearts
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(10, 10, player.maxHealth * 20, 25);
@@ -1558,6 +1600,8 @@ function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, le
     ctx.fillStyle = '#a855f7';
     ctx.fillText(`Level: ${level}`, 20, 185);
 
+    ctx.restore();
+
     // Message (treasure collected)
     if (message && message.timer > 0) {
         const alpha = Math.min(1, message.timer / 30);
@@ -1574,6 +1618,10 @@ function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, le
     }
 
     // Day/Night timer (top center)
+    const topCenterOpacity = checkOverlap(hudRegions.topCenter) ? 0.3 : 1.0;
+    ctx.save();
+    ctx.globalAlpha = topCenterOpacity;
+
     const dayProgress = dayTimer / dayDuration;
     const timerWidth = 400;
     const timerHeight = 40;
@@ -1656,6 +1704,114 @@ function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, le
     ctx.textAlign = 'center';
     ctx.fillText(`${minutes}:${seconds.toString().padStart(2, '0')}`, timerX + timerWidth / 2, timerY + timerHeight + 15);
     ctx.textAlign = 'left';
+
+    ctx.restore();
+
+    // Compass pointing to nearest uncollected treasure
+    const uncollectedTreasures = treasures.filter(t => !t.collected);
+    if (uncollectedTreasures.length > 0) {
+        // Find closest treasure
+        let closestTreasure = null;
+        let closestDist = Infinity;
+        uncollectedTreasures.forEach(treasure => {
+            const dx = treasure.x - player.x;
+            const dy = treasure.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < closestDist) {
+                closestDist = dist;
+                closestTreasure = treasure;
+            }
+        });
+
+        if (closestTreasure) {
+            const compassX = canvas.width - 50;
+            const compassY = 50;
+            const compassRadius = 30;
+
+            // Check compass opacity
+            const compassOpacity = checkOverlap(hudRegions.compass) ? 0.3 : 1.0;
+            ctx.save();
+            ctx.globalAlpha = compassOpacity;
+
+            // Compass background
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(compassX, compassY, compassRadius + 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Compass outer ring
+            ctx.strokeStyle = '#4a4a4a';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(compassX, compassY, compassRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Compass inner circle
+            ctx.fillStyle = '#2a2a2a';
+            ctx.beginPath();
+            ctx.arc(compassX, compassY, compassRadius - 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cardinal directions
+            ctx.fillStyle = '#666';
+            ctx.font = '10px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('N', compassX, compassY - compassRadius + 12);
+            ctx.fillText('S', compassX, compassY + compassRadius - 5);
+            ctx.fillText('E', compassX + compassRadius - 8, compassY + 3);
+            ctx.fillText('W', compassX - compassRadius + 8, compassY + 3);
+
+            // Calculate angle to treasure
+            const dx = closestTreasure.x - player.x;
+            const dy = closestTreasure.y - player.y;
+            const angle = Math.atan2(dy, dx);
+
+            // Draw needle pointing to treasure
+            const needleLength = compassRadius - 8;
+            const needleWidth = 6;
+
+            ctx.save();
+            ctx.translate(compassX, compassY);
+            ctx.rotate(angle);
+
+            // Needle (pointing direction - gold/yellow for treasure)
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.moveTo(needleLength, 0);
+            ctx.lineTo(0, -needleWidth / 2);
+            ctx.lineTo(4, 0);
+            ctx.lineTo(0, needleWidth / 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Needle tail (opposite direction - darker)
+            ctx.fillStyle = '#666';
+            ctx.beginPath();
+            ctx.moveTo(-needleLength + 8, 0);
+            ctx.lineTo(0, -needleWidth / 2 + 1);
+            ctx.lineTo(4, 0);
+            ctx.lineTo(0, needleWidth / 2 - 1);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+
+            // Center dot
+            ctx.fillStyle = '#888';
+            ctx.beginPath();
+            ctx.arc(compassX, compassY, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Distance indicator
+            const distInTiles = Math.round(closestDist / TILE_SIZE);
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = '10px "Courier New", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${distInTiles}`, compassX, compassY + compassRadius + 15);
+
+            ctx.restore();
+        }
+    }
 }
 
 // Game
@@ -2152,7 +2308,7 @@ class Game {
         drawUI(this.player, this.score, this.followers.length,
                this.treasures.filter(t => t.collected).length,
                this.treasures.length, this.level, this.message,
-               this.dayTimer, this.dayDuration);
+               this.dayTimer, this.dayDuration, this.treasures, this.camera, this.followers);
     }
 }
 
