@@ -149,59 +149,214 @@ class AudioManager {
         this.playNote(100 + Math.random() * 50, 0.05, 'triangle');
     }
 
-    // Background music - dark underworld theme
+    // NES-style Pikmin-inspired music - whimsical garden exploration theme
+    playNESNote(frequency, duration, type, gainNode, volume = 0.3, delay = 0) {
+        const now = this.audioContext.currentTime + delay;
+        const oscillator = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, now);
+
+        // NES-style envelope: quick attack, sustain, quick release
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+        gain.gain.setValueAtTime(volume * 0.7, now + 0.02);
+        gain.gain.linearRampToValueAtTime(volume * 0.6, now + duration * 0.8);
+        gain.gain.linearRampToValueAtTime(0, now + duration);
+
+        oscillator.connect(gain);
+        gain.connect(gainNode);
+
+        oscillator.start(now);
+        oscillator.stop(now + duration);
+    }
+
+    // Pulse wave with duty cycle simulation (more NES-authentic)
+    playPulseNote(frequency, duration, gainNode, volume = 0.25, delay = 0) {
+        const now = this.audioContext.currentTime + delay;
+
+        // Create two oscillators for richer pulse sound
+        const osc1 = this.audioContext.createOscillator();
+        const osc2 = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+
+        osc1.type = 'square';
+        osc2.type = 'square';
+        osc1.frequency.setValueAtTime(frequency, now);
+        osc2.frequency.setValueAtTime(frequency * 1.002, now); // Slight detune for richness
+
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(volume, now + 0.008);
+        gain.gain.setValueAtTime(volume * 0.8, now + 0.02);
+        gain.gain.linearRampToValueAtTime(volume * 0.6, now + duration * 0.7);
+        gain.gain.linearRampToValueAtTime(0, now + duration);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(gainNode);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + duration);
+        osc2.stop(now + duration);
+    }
+
+    // Noise channel for percussion
+    playNoise(duration, gainNode, volume = 0.15, delay = 0) {
+        const now = this.audioContext.currentTime + delay;
+        const bufferSize = this.audioContext.sampleRate * duration;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.audioContext.createBufferSource();
+        const gain = this.audioContext.createGain();
+        const filter = this.audioContext.createBiquadFilter();
+
+        noise.buffer = buffer;
+        filter.type = 'highpass';
+        filter.frequency.value = 1000;
+
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(gainNode);
+
+        noise.start(now);
+        noise.stop(now + duration);
+    }
+
     startBackgroundMusic() {
+        if (this.musicPlaying) return;
+        this.musicPlaying = true;
+
+        const BPM = 140;
+        const beatDuration = 60 / BPM;
+        const sixteenth = beatDuration / 4;
+        const eighth = beatDuration / 2;
+        const quarter = beatDuration;
+        const half = beatDuration * 2;
+
+        // Note frequencies
+        const notes = {
+            C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00,
+            A4: 440.00, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25,
+            F5: 698.46, G5: 783.99, A5: 880.00,
+            C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00,
+            A3: 220.00, B3: 246.94,
+            C2: 65.41, D2: 73.42, E2: 82.41, F2: 87.31, G2: 98.00,
+            A2: 110.00, B2: 123.47
+        };
+
+        // Pikmin-inspired melody - bouncy, optimistic, nature-themed
+        // Reminiscent of "The Forest of Hope" / exploration themes
         const melody = [
-            { freq: 440.00, dur: 0.4 }, // A4
-            { freq: 415.30, dur: 0.2 }, // G#4
-            { freq: 369.99, dur: 0.4 }, // F#4
-            { freq: 329.63, dur: 0.4 }, // E4
-            { freq: 293.66, dur: 0.2 }, // D4
-            { freq: 329.63, dur: 0.4 }, // E4
-            { freq: 369.99, dur: 0.6 }, // F#4
-            { freq: 329.63, dur: 0.4 }, // E4
-            { freq: 293.66, dur: 0.4 }, // D4
-            { freq: 246.94, dur: 0.8 }, // B3
+            // Phrase 1 - cheerful opening
+            { n: 'G4', d: eighth }, { n: 'A4', d: eighth }, { n: 'C5', d: quarter },
+            { n: 'E5', d: eighth }, { n: 'D5', d: eighth }, { n: 'C5', d: quarter },
+            { n: 'G4', d: eighth }, { n: 'A4', d: eighth }, { n: 'C5', d: eighth }, { n: 'D5', d: eighth },
+            { n: 'E5', d: half },
+            // Phrase 2 - playful response
+            { n: 'E5', d: eighth }, { n: 'D5', d: eighth }, { n: 'C5', d: quarter },
+            { n: 'A4', d: eighth }, { n: 'G4', d: eighth }, { n: 'A4', d: quarter },
+            { n: 'G4', d: eighth }, { n: 'E4', d: eighth }, { n: 'G4', d: quarter },
+            { n: 'A4', d: half },
+            // Phrase 3 - building up
+            { n: 'C5', d: eighth }, { n: 'D5', d: eighth }, { n: 'E5', d: quarter },
+            { n: 'G5', d: eighth }, { n: 'E5', d: eighth }, { n: 'D5', d: quarter },
+            { n: 'C5', d: eighth }, { n: 'D5', d: eighth }, { n: 'E5', d: eighth }, { n: 'G5', d: eighth },
+            { n: 'A5', d: quarter }, { n: 'G5', d: quarter },
+            // Phrase 4 - resolution
+            { n: 'E5', d: eighth }, { n: 'D5', d: eighth }, { n: 'C5', d: quarter },
+            { n: 'A4', d: eighth }, { n: 'C5', d: eighth }, { n: 'G4', d: quarter },
+            { n: 'E4', d: eighth }, { n: 'G4', d: eighth }, { n: 'A4', d: eighth }, { n: 'G4', d: eighth },
+            { n: 'C5', d: half },
         ];
 
+        // Harmony/countermelody
+        const harmony = [
+            { n: 'E4', d: quarter }, { n: 'E4', d: quarter }, { n: 'G4', d: quarter }, { n: 'G4', d: quarter },
+            { n: 'E4', d: quarter }, { n: 'G4', d: quarter }, { n: 'A4', d: half },
+            { n: 'G4', d: quarter }, { n: 'E4', d: quarter }, { n: 'D4', d: quarter }, { n: 'E4', d: quarter },
+            { n: 'D4', d: quarter }, { n: 'C4', d: quarter }, { n: 'D4', d: half },
+            { n: 'E4', d: quarter }, { n: 'G4', d: quarter }, { n: 'A4', d: quarter }, { n: 'G4', d: quarter },
+            { n: 'E4', d: quarter }, { n: 'G4', d: quarter }, { n: 'C5', d: quarter }, { n: 'B4', d: quarter },
+            { n: 'G4', d: quarter }, { n: 'E4', d: quarter }, { n: 'D4', d: quarter }, { n: 'E4', d: quarter },
+            { n: 'C4', d: quarter }, { n: 'D4', d: quarter }, { n: 'E4', d: half },
+        ];
+
+        // Bass line - triangle wave like NES
         const bass = [
-            { freq: 110.00, dur: 0.8 }, // A2
-            { freq: 146.83, dur: 0.8 }, // D3
-            { freq: 123.47, dur: 0.8 }, // B2
-            { freq: 110.00, dur: 0.8 }, // A2
+            { n: 'C3', d: quarter }, { n: 'C3', d: quarter }, { n: 'G2', d: quarter }, { n: 'G2', d: quarter },
+            { n: 'A2', d: quarter }, { n: 'A2', d: quarter }, { n: 'E2', d: quarter }, { n: 'G2', d: quarter },
+            { n: 'C3', d: quarter }, { n: 'E3', d: quarter }, { n: 'G2', d: quarter }, { n: 'C3', d: quarter },
+            { n: 'F2', d: quarter }, { n: 'G2', d: quarter }, { n: 'A2', d: half },
+            { n: 'C3', d: quarter }, { n: 'C3', d: quarter }, { n: 'E3', d: quarter }, { n: 'G3', d: quarter },
+            { n: 'A2', d: quarter }, { n: 'C3', d: quarter }, { n: 'E3', d: quarter }, { n: 'D3', d: quarter },
+            { n: 'C3', d: quarter }, { n: 'G2', d: quarter }, { n: 'A2', d: quarter }, { n: 'B2', d: quarter },
+            { n: 'C3', d: quarter }, { n: 'G2', d: quarter }, { n: 'C3', d: half },
         ];
 
-        let melodyIndex = 0;
-        let bassIndex = 0;
-        let time = 0;
+        // Drum pattern using noise
+        const drumPattern = [
+            { type: 'kick', d: quarter }, { type: 'hat', d: eighth }, { type: 'hat', d: eighth },
+            { type: 'snare', d: quarter }, { type: 'hat', d: eighth }, { type: 'hat', d: eighth },
+        ];
 
-        const playMelodyNote = () => {
-            if (melodyIndex < melody.length) {
-                const note = melody[melodyIndex];
-                this.playNote(note.freq, note.dur, 'square', this.musicGain);
-                melodyIndex++;
-                time += note.dur * 1000;
-                setTimeout(playMelodyNote, note.dur * 1000);
-            } else {
-                melodyIndex = 0;
-                setTimeout(playMelodyNote, 100);
+        const loopDuration = melody.reduce((sum, n) => sum + (n.d || quarter), 0) * 1000;
+
+        const playLoop = () => {
+            let melodyTime = 0;
+            melody.forEach(note => {
+                if (note.n && notes[note.n]) {
+                    this.playPulseNote(notes[note.n], note.d * 0.9, this.musicGain, 0.2, melodyTime);
+                }
+                melodyTime += note.d;
+            });
+
+            let harmonyTime = 0;
+            harmony.forEach(note => {
+                if (note.n && notes[note.n]) {
+                    this.playNESNote(notes[note.n], note.d * 0.85, 'square', this.musicGain, 0.1, harmonyTime);
+                }
+                harmonyTime += note.d;
+            });
+
+            let bassTime = 0;
+            bass.forEach(note => {
+                if (note.n && notes[note.n]) {
+                    this.playNESNote(notes[note.n], note.d * 0.8, 'triangle', this.musicGain, 0.25, bassTime);
+                }
+                bassTime += note.d;
+            });
+
+            // Drums
+            const totalBeats = Math.floor(loopDuration / 1000 / quarter) * quarter;
+            for (let t = 0; t < totalBeats; t += quarter * 2) {
+                // Kick on 1
+                this.playNoise(0.08, this.musicGain, 0.08, t);
+                // Hi-hat
+                this.playNoise(0.03, this.musicGain, 0.04, t + eighth);
+                this.playNoise(0.03, this.musicGain, 0.04, t + eighth * 2);
+                // Snare on 2
+                this.playNoise(0.1, this.musicGain, 0.06, t + quarter);
+                // Hi-hat
+                this.playNoise(0.03, this.musicGain, 0.04, t + quarter + eighth);
+                this.playNoise(0.03, this.musicGain, 0.04, t + quarter + eighth * 2);
+            }
+
+            if (this.musicPlaying) {
+                setTimeout(playLoop, loopDuration);
             }
         };
 
-        const playBassNote = () => {
-            if (bassIndex < bass.length) {
-                const note = bass[bassIndex];
-                this.playNote(note.freq * 0.5, note.dur, 'triangle', this.musicGain);
-                bassIndex++;
-                setTimeout(playBassNote, note.dur * 1000);
-            } else {
-                bassIndex = 0;
-                setTimeout(playBassNote, 100);
-            }
-        };
-
-        playMelodyNote();
-        playBassNote();
+        playLoop();
     }
 }
 
@@ -1389,7 +1544,7 @@ function drawUI(player, score, pikminCount, treasureCollected, treasureTotal, le
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(10, 85, 150, 30);
     ctx.fillStyle = '#4ade80';
-    ctx.fillText(`Pikmin: ${pikminCount}`, 20, 105);
+    ctx.fillText(`Pixmin: ${pikminCount}`, 20, 105);
 
     // Treasure count
     ctx.fillStyle = '#1a1a1a';
